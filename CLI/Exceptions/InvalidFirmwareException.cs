@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Text;
 
-namespace boschfwtool.Exceptions
+namespace BoschFirmwareTool.Exceptions
 {
     class InvalidFirmwareException : Exception
     {

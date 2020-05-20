@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace boschfwtool
+namespace BoschFirmwareTool
 {
     static class Constants
     {
