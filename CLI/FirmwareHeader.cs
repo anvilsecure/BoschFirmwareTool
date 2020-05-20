@@ -23,7 +23,9 @@ namespace BoschFirmwareTool
         public static FirmwareHeader Parse(ReadOnlySpan<byte> span)
         {
             if (span.Length < HeaderLength)
-                throw new ArgumentException($"{nameof(span)} must be at least {HeaderLength} bytes long");
+            {
+                throw new ArgumentException($"input buffer too short", nameof(span));
+            }
 
             return new FirmwareHeader
             {

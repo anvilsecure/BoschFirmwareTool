@@ -39,7 +39,7 @@ namespace BoschFirmwareTool
             Memory<byte> buf = new byte[_source.Length];
             _source.Read(buf.Span);
 
-            // Grab the file header and validte magic, checksum
+            // Grab the file header and validate magic, checksum
             var fileHeader = FirmwareHeader.Parse(buf.Span);
             if (fileHeader.Magic != Constants.FirmwareMagic)
             {
