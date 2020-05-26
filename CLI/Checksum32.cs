@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace BoschFirmwareTool
@@ -11,12 +12,18 @@ namespace BoschFirmwareTool
         /// </summary>
         /// <param name="source"></param>
         /// <returns></returns>
-        public static uint Checksum(ReadOnlySpan<byte> source)
+        public static uint Checksum(Stream stream)
         {
             uint checksum = 0;
-            foreach (var b in source)
+            int read = 0;
+            Span<byte> buf = stackalloc byte[1024];
+            
+            while ((read = stream.Read(buf)) > 0)
             {
-                checksum += b;
+                foreach (var b in buf[..read])
+                {
+                    checksum += b;
+                }
             }
 
             return checksum;

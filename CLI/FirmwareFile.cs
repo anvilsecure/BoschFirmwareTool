@@ -20,14 +20,21 @@ namespace BoschFirmwareTool
             if (!stream.CanRead)
                 throw new ArgumentException("stream is closed or unreadable");
 
+            // Should probably copy it into memory in this case.
+            if (!stream.CanSeek)
+                throw new ArgumentException("stream is closed or unreadable");
+
             _stream = stream;
 
-            // Grab root header and sanity check
+            // Grab root header and sanity check (magic, checksum)
             var header = ReadInitialHeader();
             if (header.Magic != Constants.FirmwareMagic)
                 throw new InvalidDataException("firmware image invalid");
 
             FileHeader = header;
+            var calculatedChecksum = Checksum32.Checksum(_stream);
+            if (calculatedChecksum != FileHeader.Checksum)
+                throw new InvalidDataException($"checksum mismatch, header: {FileHeader.Checksum}, calculated: {calculatedChecksum}");
         }
 
         public FirmwareHeader FileHeader { get; private set; }
