@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Transactions;
 
 namespace BoschFirmwareTool
 {
@@ -45,17 +46,22 @@ namespace BoschFirmwareTool
 
             // TODO: Main file header may have an empty checksum. Subheader(s) will have them set, we can check those.
             var calculatedChecksum = Checksum32.Checksum(_stream);
-            if (calculatedChecksum != _rootHeader.Checksum)
-                throw new InvalidDataException($"checksum mismatch, header: {_rootHeader.Checksum}, calculated: {calculatedChecksum}");
+            //if (calculatedChecksum != _rootHeader.Checksum)
+            //    throw new InvalidDataException($"checksum mismatch, header: {_rootHeader.Checksum:X}, calculated: {calculatedChecksum:X}");
 
             // Get remaining file headers
             if (_rootHeader.Target == (uint)FirmwareTargets.Nested)
             {
                 GetSubheaders();
+                GetFiles();
+            }
+            else
+            {
+                // TODO: This may not be correct, find more examples.
+                GetRawFile();
             }
 
-            // Setup file structures
-            GetFiles();
+            // TODO: Add extraction capability for RomFS files, which are just raw fileheader/data segments without firmware headers.
         }
 
         public IEnumerable<FirmwareHeader> Headers
@@ -85,6 +91,23 @@ namespace BoschFirmwareTool
             }
 
             _disposed = true;
+        }
+
+        private void GetRawFile()
+        {
+            var file = new FirmwareFile
+            {
+                Header = new FileHeader
+                {
+                    Filename = "filename.bin" // TODO: get the input filename, we'll default to stripping the original (likely .fw) extension and adding .bin
+                }
+            };
+
+            _dataStream.Seek(FirmwareHeader.HeaderLength, SeekOrigin.Begin);
+            file.Contents = new byte[_rootHeader.Length];
+            _dataStream.Read(file.Contents);
+
+            _files.Add(file);
         }
 
         private void GetFiles()
