@@ -12,22 +12,32 @@ namespace BoschFirmwareTool.CLI
         {
             var rootCmd = new RootCommand("A tool for parsing and extracting Bosch camera firmware files.")
             {
-                new Argument<FileInfo>("inputFile", "The firmware file to operate on").ExistingOnly()
+                new Argument<FileInfo>("inputFile", "The firmware file to operate on").ExistingOnly(),
+                new Option<DirectoryInfo>(new [] { "--output", "-o" },
+                    () => { return new DirectoryInfo(Directory.GetCurrentDirectory()); },
+                     "Output directory. Defaults to the current directory.")
             };
 
-            rootCmd.Handler = CommandHandler.Create<FileInfo>((inputFile) =>
+            rootCmd.Handler = CommandHandler.Create<FileInfo, DirectoryInfo>((inputFile, output) =>
             {
-                using var file = File.OpenRead(inputFile.FullName);
-                using var firmwareFile = new BoschFirmware(file);
-
-                foreach (var h in firmwareFile.Headers)
+                try
                 {
-                    Console.WriteLine(h.ToString());
+                    using var file = File.OpenRead(inputFile.FullName);
+                    using var firmwareFile = new BoschFirmware(file);
+
+                    var directory = Directory.CreateDirectory(output.FullName);
+                    foreach (var f in firmwareFile.Files)
+                    {
+                        var fpath = Path.Combine(directory.FullName, f.Header.Filename);
+                        Console.WriteLine($"Writing: {fpath}");
+                        using var newFile = File.Create(fpath);
+                        newFile.Write(f.Contents);
+                    }
                 }
-
-                foreach (var f in firmwareFile.Files)
+                catch (Exception ex)
                 {
-                    Console.WriteLine(f.Header.Filename);
+                    Console.WriteLine($"Operation failed: {ex.Message}");
+                    Console.WriteLine(ex.StackTrace);
                 }
             });
 
