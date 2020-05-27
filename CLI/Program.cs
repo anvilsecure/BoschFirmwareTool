@@ -18,9 +18,12 @@ namespace BoschFirmwareTool.CLI
             rootCmd.Handler = CommandHandler.Create<FileInfo>((inputFile) =>
             {
                 using var file = File.OpenRead(inputFile.FullName);
-                using var firmwareFile = new FirmwareFile(file);
+                using var firmwareFile = new BoschFirmware(file);
 
-                Console.WriteLine($"{firmwareFile.FileHeader.Magic:X}");
+                foreach (var h in firmwareFile.Headers)
+                {
+                    Console.WriteLine(h.ToString());
+                }
             });
 
             return await rootCmd.InvokeAsync(args);

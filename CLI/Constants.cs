@@ -8,4 +8,9 @@ namespace BoschFirmwareTool
     {
         public static readonly uint FirmwareMagic = 0x10122003;
     }
+
+    enum FirmwareTargets : uint
+    {
+        Nested = 0x10
+    }
 }

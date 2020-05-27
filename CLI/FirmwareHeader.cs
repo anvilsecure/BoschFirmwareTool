@@ -10,15 +10,16 @@ namespace BoschFirmwareTool
         // This structure only consumes 0x40 bytes, but the file allocates 0x400. The rest is used for unknown purposes.
         public static readonly int HeaderLength = 0x400;
 
-        public uint Magic { get; private set; }
-        public uint Target { get; private set; }
-        public uint Variant { get; private set; }
-        public uint Version { get; private set; }
-        public uint Length { get; private set; }
-        public uint Base { get; private set; }
-        public uint Checksum { get; private set; }
-        public uint Type { get; private set; }
-        public byte[] NegativeList { get; private set; }
+        public uint Magic { get; set; }
+        public uint Target { get; set; }
+        public uint Variant { get; set; }
+        public uint Version { get; set; }
+        public uint Length { get; set; }
+        public uint Base { get; set; }
+        public uint Checksum { get; set; } // Only present on the "root" header and subheaders. If headers are doubly nested, file header will not have a checksum.
+        public uint Type { get; set; }
+        public byte[] NegativeList { get; set; }
+        public uint Offset { get; set; } // Offset into the file which it was found.
 
         public static FirmwareHeader Parse(ReadOnlySpan<byte> span)
         {
@@ -39,6 +40,19 @@ namespace BoschFirmwareTool
                 Type = BinaryPrimitives.ReadUInt32BigEndian(span[28..32]),
                 NegativeList = span[32..64].ToArray()
             };
+        }
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder();
+
+            sb.Append("Firmware Header\n");
+            sb.Append($"Target: {Target:X} ");
+            sb.Append($"Variant: {Variant:X} ");
+            sb.Append($"Version: {Version:X} ");
+            sb.Append($"Length: {Length:X}");
+
+            return sb.ToString();
         }
     }
 }
