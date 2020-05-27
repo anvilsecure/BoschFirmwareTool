@@ -1,6 +1,7 @@
 ﻿using BoschFirmwareTool;
 using BoschFirmwareTool.Exceptions;
 using boschfwtool;
+using boschfwtool.Streams;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +13,7 @@ namespace BoschFirmwareTool
     class BoschFirmware : IDisposable
     {
         private Stream _stream;
+        private Stream _dataStream; // Wraps _stream for deobfuscating or decrypting data segments. Does not own / close _stream.
         private FirmwareHeader _rootHeader;
         private List<FirmwareHeader> _subHeaders = new List<FirmwareHeader>();
         private List<FirmwareFile> _files = new List<FirmwareFile>();
@@ -30,6 +32,9 @@ namespace BoschFirmwareTool
                 throw new ArgumentException("stream is closed or unreadable");
 
             _stream = stream;
+
+            // TODO: Detect encryption and create correct _dataStream impl.
+            _dataStream = new XorStream(_stream, Constants.DataXOR);
 
             // Grab root header and sanity check (magic, checksum)
             var header = ReadHeader(0);
@@ -51,8 +56,6 @@ namespace BoschFirmwareTool
 
             // Setup file structures
             GetFiles();
-
-            // return?
         }
 
         public IEnumerable<FirmwareHeader> Headers
@@ -92,9 +95,37 @@ namespace BoschFirmwareTool
                 return fw.Target != (uint)FirmwareTargets.Nested;
             });
 
+            Span<byte> _headerBuf = stackalloc byte[FileHeader.HeaderLength];
             foreach (var h in headers)
             {
                 // Read out FirmwareFile structures into list, expose dictionary by file name too?
+                var offset = h.Offset + FirmwareHeader.HeaderLength;
+
+                while (offset < h.Length + h.Offset)
+                {
+                    _dataStream.Seek(offset, SeekOrigin.Begin);
+                    _dataStream.Read(_headerBuf);
+                    var fileHeader = FileHeader.Parse(_headerBuf);
+                    if (fileHeader.Magic != Constants.FileMagic)
+                        throw new InvalidDataException($"invalid magic at {offset:X}");
+
+                    // File sections are terminated by a null record of sorts.
+                    if (fileHeader.FileLength == 0)
+                        break;
+
+                    var contents = new byte[fileHeader.FileLength]; // TODO: sanity check this
+                    _dataStream.Read(contents);
+
+                    var file = new FirmwareFile
+                    {
+                        Header = fileHeader,
+                        Contents = contents
+                    };
+
+                    _files.Add(file);
+
+                    offset += fileHeader.OffsetToNext;
+                }
             }
         }
 

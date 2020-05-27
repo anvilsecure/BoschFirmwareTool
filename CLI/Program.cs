@@ -24,6 +24,11 @@ namespace BoschFirmwareTool.CLI
                 {
                     Console.WriteLine(h.ToString());
                 }
+
+                foreach (var f in firmwareFile.Files)
+                {
+                    Console.WriteLine(f.Header.Filename);
+                }
             });
 
             return await rootCmd.InvokeAsync(args);
