@@ -72,7 +72,8 @@ namespace boschfwtool.Streams
         {
             // TODO: XOR output for writing files.
             // Buffer 1K at a time, XOR, write?
-            _innerStream.Write(buffer, offset, count);
+            //_innerStream.Write(buffer, offset, count);
+            throw new NotImplementedException();
         }
     }
 }
