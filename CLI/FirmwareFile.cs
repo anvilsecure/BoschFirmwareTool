@@ -1,6 +1,4 @@
-﻿using boschfwtool;
-
-namespace BoschFirmwareTool
+﻿namespace BoschFirmwareTool
 {
     internal class FirmwareFile
     {

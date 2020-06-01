@@ -1,7 +1,4 @@
-﻿using BoschFirmwareTool;
-using BoschFirmwareTool.Exceptions;
-using boschfwtool;
-using boschfwtool.Streams;
+﻿using BoschFirmwareTool.Streams;
 using System;
 using System.Collections.Generic;
 using System.IO;

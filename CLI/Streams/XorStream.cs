@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace boschfwtool.Streams
+namespace BoschFirmwareTool.Streams
 {
     /// <summary>
     /// Implements a stream wrapper that performs an XOR operation on data processed with the stream.
