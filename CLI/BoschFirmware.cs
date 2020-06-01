@@ -18,6 +18,7 @@ namespace BoschFirmwareTool
         private FirmwareHeader _rootHeader;
         private List<FirmwareHeader> _subHeaders = new List<FirmwareHeader>();
         private List<FirmwareFile> _files = new List<FirmwareFile>();
+        private List<FirmwareFile> _romfsFiles = new List<FirmwareFile>();
         private bool _disposed = false;
 
         public BoschFirmware(Stream stream)
@@ -54,14 +55,13 @@ namespace BoschFirmwareTool
             {
                 GetSubheaders();
                 GetFiles();
+                GetRomFSFiles();
             }
             else
             {
                 // TODO: This may not be correct, find more examples.
                 GetRawFile();
             }
-
-            // TODO: Add extraction capability for RomFS files, which are just raw fileheader/data segments without firmware headers.
         }
 
         public IEnumerable<FirmwareHeader> Headers
@@ -75,6 +75,8 @@ namespace BoschFirmwareTool
         }
 
         public IEnumerable<FirmwareFile> Files => _files;
+        public IEnumerable<FirmwareFile> RomFSFiles => _romfsFiles;
+        public bool HasRomFS => _romfsFiles.Count > 0;
 
         public void Dispose() => Dispose(true);
 
@@ -108,6 +110,44 @@ namespace BoschFirmwareTool
             _dataStream.Read(file.Contents);
 
             _files.Add(file);
+        }
+
+        private void GetRomFSFiles()
+        {
+            var files = Files.Where((file) =>
+            {
+                return file.Header.Filename.StartsWith("RomFS.bin");
+            });
+
+            foreach (var f in files)
+            {
+                using var romfsStream = new MemoryStream(f.Contents);
+                Span<byte> headerBuf = stackalloc byte[FileHeader.HeaderLength];
+                long offset = 0;
+
+                while (offset < f.Header.FileLength)
+                {
+                    romfsStream.Seek(offset, SeekOrigin.Begin);
+                    romfsStream.Read(headerBuf);
+                    var header = FileHeader.Parse(headerBuf);
+                    if (header.Magic != Constants.FileMagic)
+                        throw new InvalidDataException($"invalid magic in RomFS file {f.Header.Filename}, offset: {offset:X}");
+
+                    if (header.FileLength == 0)
+                        break;
+
+                    var contents = new byte[header.FileLength];
+                    romfsStream.Read(contents);
+                    var newFile = new FirmwareFile
+                    {
+                        Header = header,
+                        Contents = contents
+                    };
+
+                    _romfsFiles.Add(newFile);
+                    offset += header.OffsetToNext;
+                }
+            }
         }
 
         private void GetFiles()

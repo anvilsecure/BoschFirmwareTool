@@ -2,6 +2,7 @@
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
 
 namespace BoschFirmwareTool.CLI
@@ -32,6 +33,22 @@ namespace BoschFirmwareTool.CLI
                         Console.WriteLine($"Writing: {fpath}");
                         using var newFile = File.Create(fpath);
                         newFile.Write(f.Contents);
+                    }
+                    if (firmwareFile.HasRomFS)
+                    {
+                        var romfsDir = Directory.CreateDirectory(Path.Combine(output.FullName, "RomFS"));
+                        foreach (var f in firmwareFile.RomFSFiles)
+                        {
+                            var subDir = Path.GetDirectoryName(f.Header.Filename);
+                            if (!String.IsNullOrEmpty(subDir))
+                            {
+                                Directory.CreateDirectory(Path.Combine(romfsDir.FullName, subDir));
+                            }
+                            var fpath = Path.Combine(romfsDir.FullName, f.Header.Filename);
+                            Console.WriteLine($"Writing RomFS: {fpath}");
+                            using var newFile = File.Create(fpath);
+                            newFile.Write(f.Contents);
+                        }
                     }
                 }
                 catch (Exception ex)
