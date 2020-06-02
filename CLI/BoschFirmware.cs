@@ -56,7 +56,6 @@ namespace BoschFirmwareTool
             }
             else
             {
-                // TODO: This may not be correct, find more examples.
                 GetRawFile();
             }
         }
