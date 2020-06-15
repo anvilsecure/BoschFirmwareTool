@@ -9,6 +9,11 @@ namespace BoschFirmwareTool.CLI
 {
     class Program
     {
+        static void ExtractProgress(object sender, ExtractProgressEventArgs e)
+        {
+            Console.WriteLine($"Extracting: {e.FileName}");
+        }
+
         static async Task<int> Main(string[] args)
         {
             var rootCmd = new RootCommand("A tool for parsing and extracting Bosch camera firmware files.")
@@ -19,37 +24,13 @@ namespace BoschFirmwareTool.CLI
                      "Output directory. Defaults to the current directory.")
             };
 
-            rootCmd.Handler = CommandHandler.Create<FileInfo, DirectoryInfo>((inputFile, output) =>
+            rootCmd.Handler = CommandHandler.Create((FileInfo inputFile, DirectoryInfo output) =>
             {
                 try
                 {
-                    using var file = File.OpenRead(inputFile.FullName);
-                    using var firmwareFile = new BoschFirmware(file);
-
-                    var directory = Directory.CreateDirectory(output.FullName);
-                    foreach (var f in firmwareFile.Files)
-                    {
-                        var fpath = Path.Combine(directory.FullName, f.Header.Filename);
-                        Console.WriteLine($"Writing: {fpath}");
-                        using var newFile = File.Create(fpath);
-                        newFile.Write(f.Contents);
-                    }
-                    if (firmwareFile.HasRomFS)
-                    {
-                        var romfsDir = Directory.CreateDirectory(Path.Combine(output.FullName, "RomFS"));
-                        foreach (var f in firmwareFile.RomFSFiles)
-                        {
-                            var subDir = Path.GetDirectoryName(f.Header.Filename);
-                            if (!String.IsNullOrEmpty(subDir))
-                            {
-                                Directory.CreateDirectory(Path.Combine(romfsDir.FullName, subDir));
-                            }
-                            var fpath = Path.Combine(romfsDir.FullName, f.Header.Filename);
-                            Console.WriteLine($"Writing RomFS: {fpath}");
-                            using var newFile = File.Create(fpath);
-                            newFile.Write(f.Contents);
-                        }
-                    }
+                    using var firmware = BoschFirmware.FromFile(inputFile.FullName);
+                    firmware.OnExtractProgress += ExtractProgress;
+                    firmware.ExtractAll(output.FullName);
                 }
                 catch (Exception ex)
                 {

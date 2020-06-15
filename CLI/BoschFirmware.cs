@@ -1,30 +1,48 @@
 ﻿using BoschFirmwareTool.Crypto;
 using BoschFirmwareTool.Streams;
+using boschfwtool.Streams;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Transactions;
+
+using RSA = BoschFirmwareTool.Crypto.RSA;
 
 namespace BoschFirmwareTool
 {
     class BoschFirmware : IDisposable
     {
+        private string _origFilename;
         private Stream _stream;
         private Stream _dataStream; // Wraps _stream for deobfuscating or decrypting data segments. Does not own / close _stream.
+
         private FirmwareHeader _rootHeader;
 
-        private bool _isEncrypted = false;
-        private AESKey _key;
-        private RSA _cipher;
+        private readonly RSA _cipher = new RSA(RSAKey.Modulus, RSAKey.PublicExponent);
 
         private List<FirmwareHeader> _subHeaders = new List<FirmwareHeader>();
         private List<FirmwareFile> _files = new List<FirmwareFile>();
         private List<FirmwareFile> _romfsFiles = new List<FirmwareFile>();
         private bool _disposed = false;
 
-        public BoschFirmware(Stream stream)
+        public static BoschFirmware FromFile(string filename)
+        {
+            if (String.IsNullOrEmpty(filename))
+                throw new ArgumentNullException(nameof(filename));
+
+            var filehandle = File.OpenRead(filename);
+            var fw = new BoschFirmware(filehandle)
+            {
+                _origFilename = Path.GetFileName(filename)
+            };
+
+            return fw;
+        }
+
+        private BoschFirmware(Stream stream)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
@@ -38,37 +56,17 @@ namespace BoschFirmwareTool
 
             _stream = stream;
 
-            // TODO: Detect encryption and create correct _dataStream impl.
-            //_dataStream = new XorStream(_stream, Constants.DataXOR);
-
             // Grab root header and sanity check (magic, checksum)
             var header = ReadHeader(0);
             if (header.Magic != Constants.FirmwareMagic)
-                throw new InvalidDataException("firmware image invalid");
-
-            if ((header.Version & 0xFFFF) > 0x650) // Encryption is on versions above 6.50 broadly speaking
-            {
-                _isEncrypted = true;
-                _cipher = new RSA(RSAKey.Modulus, RSAKey.PublicExponent);
-            }
+                throw new InvalidDataException("firmware image invalid, bad magic");
 
             _rootHeader = header;
-
-            // TODO: Main file header may have an empty checksum. Subheader(s) will have them set, we can check those.
-            var calculatedChecksum = Checksum32.Checksum(_stream);
-            //if (calculatedChecksum != _rootHeader.Checksum)
-            //    throw new InvalidDataException($"checksum mismatch, header: {_rootHeader.Checksum:X}, calculated: {calculatedChecksum:X}");
 
             // Get remaining file headers
             if (_rootHeader.Target == (uint)FirmwareTargets.Nested)
             {
                 GetSubheaders();
-                GetFiles();
-                GetRomFSFiles();
-            }
-            else
-            {
-                GetRawFile();
             }
         }
 
@@ -82,9 +80,7 @@ namespace BoschFirmwareTool
             }
         }
 
-        public IEnumerable<FirmwareFile> Files => _files;
-        public IEnumerable<FirmwareFile> RomFSFiles => _romfsFiles;
-        public bool HasRomFS => _romfsFiles.Count > 0;
+        public event EventHandler<ExtractProgressEventArgs> OnExtractProgress;
 
         public void Dispose() => Dispose(true);
 
@@ -103,26 +99,53 @@ namespace BoschFirmwareTool
             _disposed = true;
         }
 
+        public void ExtractAll(string outputDirectory)
+        {
+            if (String.IsNullOrEmpty(outputDirectory))
+                throw new ArgumentNullException(nameof(outputDirectory));
+
+            var outDir = Directory.CreateDirectory(outputDirectory);
+
+            if (_subHeaders.Count == 0)
+            {
+                ExtractRawFile(outDir);
+            }
+            else
+            {
+                ExtractAllFiles(outDir);
+            }
+        }
+
+        private void ExtractRawFile(DirectoryInfo outputDir)
+        {
+
+        }
+
+        private void ExtractAllFiles(DirectoryInfo outputDir)
+        {
+
+        }
+
         private void GetRawFile()
         {
             var file = new FirmwareFile
             {
                 Header = new FileHeader
                 {
-                    Filename = "filename.bin" // TODO: get the input filename, we'll default to stripping the original (likely .fw) extension and adding .bin
+                    Filename = _origFilename + ".bin"
                 }
             };
 
-            _dataStream.Seek(FirmwareHeader.HeaderLength, SeekOrigin.Begin);
+            using var dataStream = GetDataStream(_rootHeader);
             file.Contents = new byte[_rootHeader.Length];
-            _dataStream.Read(file.Contents);
+            dataStream.Read(file.Contents);
 
             _files.Add(file);
         }
 
         private void GetRomFSFiles()
         {
-            var files = Files.Where((file) =>
+            var files = _files.Where((file) =>
             {
                 return file.Header.Filename.StartsWith("RomFS.bin");
             });
@@ -227,6 +250,34 @@ namespace BoschFirmwareTool
             header.Offset = offset;
 
             return header;
+        }
+
+        private Stream GetDataStream(FirmwareHeader header)
+        {
+            var substream = new SubStream(_stream, header.Offset, header.Length);
+
+            var hasEncryptionKey = !header.KeyBlob.All(b => b == 0);
+            if (hasEncryptionKey)
+            {
+                // Pull AES key from header, init AES decryptor, return stream
+                var rawAesKey = _cipher.PublicDecrypt(header.KeyBlob);
+                var aesKey = AESKey.Parse(rawAesKey);
+
+                var aesAlg = new AesCryptoServiceProvider
+                {
+                    Key = aesKey.Key,
+                    IV = aesKey.IV,
+                    Mode = CipherMode.CBC
+                };
+
+                var decryptor = aesAlg.CreateDecryptor();
+                var cryptoStream = new CryptoStream(substream, decryptor, CryptoStreamMode.Read, leaveOpen: true);
+                return cryptoStream;
+            }
+            else
+            {
+                return new XorStream(substream, Constants.DataXOR);
+            }
         }
     }
 }

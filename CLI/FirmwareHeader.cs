@@ -19,7 +19,7 @@ namespace BoschFirmwareTool
         public uint Checksum { get; set; } // Only present on the "root" header and subheaders. If headers are doubly nested, file header will not have a checksum.
         public uint Type { get; set; }
         public byte[] NegativeList { get; set; }
-        public byte[] SignatureOrKey { get; set; } // Is the key in nested headers. Single header files have this in the other block.
+        public byte[] Signature { get; set; } // Is the key in nested headers. Single header files have this in the other block.
         public byte[] KeyBlob { get; set; }
         public long Offset { get; set; } // Offset into the file which it was found.
 
@@ -41,7 +41,7 @@ namespace BoschFirmwareTool
                 Checksum = BinaryPrimitives.ReadUInt32BigEndian(span[24..28]),
                 Type = BinaryPrimitives.ReadUInt32BigEndian(span[28..32]),
                 NegativeList = span[32..64].ToArray(),
-                SignatureOrKey = span[76..332].ToArray(),
+                Signature = span[76..332].ToArray(),
                 KeyBlob = span[588..844].ToArray()
             };
         }
