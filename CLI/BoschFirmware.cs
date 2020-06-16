@@ -102,6 +102,9 @@ namespace BoschFirmwareTool
 
             foreach (var header in headers)
             {
+                // For firmwares with multiple targets, parse everything into separate target directories
+                var targetDir = Directory.CreateDirectory(Path.Join(outDir.FullName, $"{header.Target:X}"));
+
                 using var dataStream = GetDataStream(header);
                 Span<byte> hdrBuf = stackalloc byte[FileHeader.HeaderLength];
 
@@ -110,7 +113,7 @@ namespace BoschFirmwareTool
                 if (fileHdr.Magic != Constants.FileMagic) // Raw file instead of structured file set. Probably.
                 {
                     var filename = _origFilename + ".bin"; // no metadata, guess the name. Usually only seen on single file firmware archives.
-                    using var file = File.OpenWrite(Path.Combine(outDir.FullName, filename));
+                    using var file = File.OpenWrite(Path.Join(targetDir.FullName, filename));
                     file.Write(hdrBuf);
                     dataStream.CopyTo(file);
 
@@ -124,10 +127,11 @@ namespace BoschFirmwareTool
                     var filename = Path.GetFileName(fileHdr.Filename); // Filenames may have a path, create path if necessary.
                     var path = Path.GetDirectoryName(fileHdr.Filename);
 
+                    var filepath = Path.Join(targetDir.FullName, path ?? "");
                     if (!String.IsNullOrEmpty(path))
-                        Directory.CreateDirectory(Path.Combine(outDir.FullName, path));
+                        Directory.CreateDirectory(Path.Join(targetDir.FullName, path));
 
-                    using var file = File.OpenWrite(Path.Combine(outDir.FullName, filename));
+                    using var file = File.OpenWrite(Path.Join(filepath, filename));
 
                     var fileBuf = new byte[fileHdr.OffsetToNext - FileHeader.HeaderLength]; // Offset is from header beginning, file length is from end of header
                     dataStream.Read(fileBuf);
