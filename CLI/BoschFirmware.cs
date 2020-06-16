@@ -6,8 +6,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
-using System.Transactions;
 
 using RSA = BoschFirmwareTool.Crypto.RSA;
 
@@ -21,8 +19,6 @@ namespace BoschFirmwareTool
         private readonly RSA _cipher = new RSA(RSAKey.Modulus, RSAKey.PublicExponent);
 
         private readonly List<FirmwareHeader> _headers = new List<FirmwareHeader>();
-        private readonly List<FirmwareFile> _files = new List<FirmwareFile>();
-        private readonly List<FirmwareFile> _romfsFiles = new List<FirmwareFile>();
         private bool _disposed = false;
 
         public static BoschFirmware FromFile(string filename)
