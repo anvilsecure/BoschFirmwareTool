@@ -2,15 +2,11 @@
 A tool for extracting firmware files intended for Bosch's line of security and IoT cameras, such as the Flexidome line.
 
 ## Capabilities
-* Currently supports obfuscated firmware revisions. Largely pre-6.5.
+* Can extract both obfuscated (<= 6.50) and encrypted firmware files.
 * Extraction:
     * Detects nested / stacked headers
     * Parses file contents for both nested and single header files
     * Can optionally parse RomFS contents. RomFS files are the same binary format as files in a nested firmware.
-    * Can optionally decompress RomFS contents upon extraction. Many files are usually GZipped.
-
-## Upcoming Features
-* Supports for encrypted firmware. Versions roughly post-6.5 encrypt data segments and have an additional 0x100 byte blob in the file headers.
 
 ## Firmware Format
 
@@ -50,4 +46,4 @@ Data following the root file header can be one of two formats:
 Firmware files before approximately version 6.5 will have obfuscated data segments. This obfuscation is a simple XOR over the data with the byte `\x42`, or 'B'.
 
 ### Encryption
-Current files have encrypted segments. Algorithm is currently unknown.
+Contemporary files have encrypted data segments, which utilizes AES-256-CBC and a key stored within that segment's header.
