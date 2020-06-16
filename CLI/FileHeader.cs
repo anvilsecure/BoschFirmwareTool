@@ -19,13 +19,15 @@ namespace BoschFirmwareTool
             if (span.Length < HeaderLength)
                 throw new ArgumentException("span too short");
 
-            return new FileHeader
+            var fh = new FileHeader
             {
                 Magic = BinaryPrimitives.ReadUInt32BigEndian(span[0..4]),
                 OffsetToNext = BinaryPrimitives.ReadUInt32BigEndian(span[4..8]),
                 Filename = Encoding.ASCII.GetString(span[8..40]).TrimEnd('\0'),
                 FileLength = BinaryPrimitives.ReadUInt32BigEndian(span[40..44])
             };
+
+            return fh;
         }
     }
 }

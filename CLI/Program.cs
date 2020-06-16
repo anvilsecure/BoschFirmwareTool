@@ -11,7 +11,7 @@ namespace BoschFirmwareTool.CLI
     {
         static void ExtractProgress(object sender, ExtractProgressEventArgs e)
         {
-            Console.WriteLine($"Extracting: {e.FileName}");
+            Console.WriteLine($"Extracting: {e.FileName}, length: {e.FileSize:X}");
         }
 
         static async Task<int> Main(string[] args)

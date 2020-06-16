@@ -5,6 +5,12 @@ namespace BoschFirmwareTool
     internal class ExtractProgressEventArgs : EventArgs
     {
         public string FileName { get; }
-        public int FileSize { get; }
+        public long FileSize { get; }
+
+        public ExtractProgressEventArgs(string filename, long filesize)
+        {
+            FileName = filename;
+            FileSize = filesize;
+        }
     }
 }

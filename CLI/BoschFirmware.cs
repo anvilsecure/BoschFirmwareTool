@@ -17,15 +17,12 @@ namespace BoschFirmwareTool
     {
         private string _origFilename;
         private Stream _stream;
-        private Stream _dataStream; // Wraps _stream for deobfuscating or decrypting data segments. Does not own / close _stream.
-
-        private FirmwareHeader _rootHeader;
 
         private readonly RSA _cipher = new RSA(RSAKey.Modulus, RSAKey.PublicExponent);
 
-        private List<FirmwareHeader> _subHeaders = new List<FirmwareHeader>();
-        private List<FirmwareFile> _files = new List<FirmwareFile>();
-        private List<FirmwareFile> _romfsFiles = new List<FirmwareFile>();
+        private readonly List<FirmwareHeader> _headers = new List<FirmwareHeader>();
+        private readonly List<FirmwareFile> _files = new List<FirmwareFile>();
+        private readonly List<FirmwareFile> _romfsFiles = new List<FirmwareFile>();
         private bool _disposed = false;
 
         public static BoschFirmware FromFile(string filename)
@@ -61,22 +58,12 @@ namespace BoschFirmwareTool
             if (header.Magic != Constants.FirmwareMagic)
                 throw new InvalidDataException("firmware image invalid, bad magic");
 
-            _rootHeader = header;
+            _headers.Add(header);
 
             // Get remaining file headers
-            if (_rootHeader.Target == (uint)FirmwareTargets.Nested)
+            if (header.Target == (uint)FirmwareTargets.Nested)
             {
                 GetSubheaders();
-            }
-        }
-
-        public IEnumerable<FirmwareHeader> Headers
-        {
-            get
-            {
-                yield return _rootHeader;
-                foreach (var s in _subHeaders)
-                    yield return s;
             }
         }
 
@@ -106,119 +93,51 @@ namespace BoschFirmwareTool
 
             var outDir = Directory.CreateDirectory(outputDirectory);
 
-            if (_subHeaders.Count == 0)
+            // Grab non-nested headers, which have data
+            var headers = _headers.Where((header) =>
             {
-                ExtractRawFile(outDir);
-            }
-            else
-            {
-                ExtractAllFiles(outDir);
-            }
-        }
-
-        private void ExtractRawFile(DirectoryInfo outputDir)
-        {
-
-        }
-
-        private void ExtractAllFiles(DirectoryInfo outputDir)
-        {
-
-        }
-
-        private void GetRawFile()
-        {
-            var file = new FirmwareFile
-            {
-                Header = new FileHeader
-                {
-                    Filename = _origFilename + ".bin"
-                }
-            };
-
-            using var dataStream = GetDataStream(_rootHeader);
-            file.Contents = new byte[_rootHeader.Length];
-            dataStream.Read(file.Contents);
-
-            _files.Add(file);
-        }
-
-        private void GetRomFSFiles()
-        {
-            var files = _files.Where((file) =>
-            {
-                return file.Header.Filename.StartsWith("RomFS.bin");
+                return header.Target != (uint)FirmwareTargets.Nested;
             });
 
-            foreach (var f in files)
+            foreach (var header in headers)
             {
-                using var romfsStream = new MemoryStream(f.Contents);
-                Span<byte> headerBuf = stackalloc byte[FileHeader.HeaderLength];
-                long offset = 0;
+                using var dataStream = GetDataStream(header);
+                Span<byte> hdrBuf = stackalloc byte[FileHeader.HeaderLength];
 
-                while (offset < f.Header.FileLength)
+                dataStream.Read(hdrBuf);
+                var fileHdr = FileHeader.Parse(hdrBuf);
+                if (fileHdr.Magic != Constants.FileMagic) // Raw file instead of structured file set. Probably.
                 {
-                    romfsStream.Seek(offset, SeekOrigin.Begin);
-                    romfsStream.Read(headerBuf);
-                    var header = FileHeader.Parse(headerBuf);
-                    if (header.Magic != Constants.FileMagic)
-                        throw new InvalidDataException($"invalid magic in RomFS file {f.Header.Filename}, offset: {offset:X}");
+                    var filename = _origFilename + ".bin"; // no metadata, guess the name. Usually only seen on single file firmware archives.
+                    using var file = File.OpenWrite(Path.Combine(outDir.FullName, filename));
+                    file.Write(hdrBuf);
+                    dataStream.CopyTo(file);
 
-                    if (header.FileLength == 0)
-                        break;
+                    var progress = new ExtractProgressEventArgs(filename, header.Length);
+                    OnExtractProgress?.Invoke(this, progress);
 
-                    var contents = new byte[header.FileLength];
-                    romfsStream.Read(contents);
-                    var newFile = new FirmwareFile
-                    {
-                        Header = header,
-                        Contents = contents
-                    };
-
-                    _romfsFiles.Add(newFile);
-                    offset += header.OffsetToNext;
+                    continue;
                 }
-            }
-        }
 
-        private void GetFiles()
-        {
-            // Grab only the headers with data
-            var headers = Headers.Where((fw) =>
-            {
-                return fw.Target != (uint)FirmwareTargets.Nested;
-            });
-
-            Span<byte> _headerBuf = stackalloc byte[FileHeader.HeaderLength];
-            foreach (var h in headers)
-            {
-                // Read out FirmwareFile structures into list, expose dictionary by file name too?
-                var offset = h.Offset + FirmwareHeader.HeaderLength;
-
-                while (offset < h.Length + h.Offset)
+                while (fileHdr.FileLength != 0) // Read until terminating record found, which has zeroed attributes
                 {
-                    _dataStream.Seek(offset, SeekOrigin.Begin);
-                    _dataStream.Read(_headerBuf);
-                    var fileHeader = FileHeader.Parse(_headerBuf);
-                    if (fileHeader.Magic != Constants.FileMagic)
-                        throw new InvalidDataException($"invalid magic at {offset:X}");
+                    var filename = Path.GetFileName(fileHdr.Filename); // Filenames may have a path, create path if necessary.
+                    var path = Path.GetDirectoryName(fileHdr.Filename);
 
-                    // File sections are terminated by a null record of sorts.
-                    if (fileHeader.FileLength == 0)
-                        break;
+                    if (!String.IsNullOrEmpty(path))
+                        Directory.CreateDirectory(Path.Combine(outDir.FullName, path));
 
-                    var contents = new byte[fileHeader.FileLength]; // TODO: sanity check this
-                    _dataStream.Read(contents);
+                    using var file = File.OpenWrite(Path.Combine(outDir.FullName, filename));
 
-                    var file = new FirmwareFile
-                    {
-                        Header = fileHeader,
-                        Contents = contents
-                    };
+                    var fileBuf = new byte[fileHdr.OffsetToNext - FileHeader.HeaderLength]; // Offset is from header beginning, file length is from end of header
+                    dataStream.Read(fileBuf);
+                    file.Write(fileBuf, 0, (int)fileHdr.FileLength);
 
-                    _files.Add(file);
+                    var progress = new ExtractProgressEventArgs(filename, fileHdr.FileLength);
+                    OnExtractProgress?.Invoke(this, progress);
 
-                    offset += fileHeader.OffsetToNext;
+                    dataStream.Read(hdrBuf);
+                    fileHdr = FileHeader.Parse(hdrBuf);
                 }
             }
         }
@@ -231,7 +150,7 @@ namespace BoschFirmwareTool
             while (offset < _stream.Length)
             {
                 var header = ReadHeader(offset);
-                _subHeaders.Add(header);
+                _headers.Add(header);
 
                 offset += (uint)(FirmwareHeader.HeaderLength + header.Length);
             }
@@ -254,7 +173,8 @@ namespace BoschFirmwareTool
 
         private Stream GetDataStream(FirmwareHeader header)
         {
-            var substream = new SubStream(_stream, header.Offset, header.Length);
+            // offset into the file past the header
+            var substream = new SubStream(_stream, header.Offset + FirmwareHeader.HeaderLength, header.Length);
 
             var hasEncryptionKey = !header.KeyBlob.All(b => b == 0);
             if (hasEncryptionKey)
@@ -267,7 +187,8 @@ namespace BoschFirmwareTool
                 {
                     Key = aesKey.Key,
                     IV = aesKey.IV,
-                    Mode = CipherMode.CBC
+                    Mode = CipherMode.CBC,
+                    Padding = PaddingMode.None // No reference to padding seen in binary, using default (PKCS7) always fails.
                 };
 
                 var decryptor = aesAlg.CreateDecryptor();
