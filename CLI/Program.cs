@@ -28,13 +28,12 @@ namespace BoschFirmwareTool.CLI
                 try
                 {
                     using var firmware = BoschFirmware.FromFile(inputFile.FullName);
-                    firmware.OnExtractProgress += ExtractProgress;
+                    firmware.ExtractProgress += ExtractProgress;
                     firmware.ExtractAll(output.FullName);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Operation failed: {ex.Message}");
-                    Console.WriteLine(ex.StackTrace);
                 }
             });
 

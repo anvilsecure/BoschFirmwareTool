@@ -21,6 +21,11 @@ namespace BoschFirmwareTool
         private readonly List<FirmwareHeader> _headers = new List<FirmwareHeader>();
         private bool _disposed = false;
 
+        /// <summary>
+        /// Create a new instance of <see cref="BoschFirmware"/> from a given file.
+        /// </summary>
+        /// <param name="filename">The path to a file containing a firmware image</param>
+        /// <returns>An initialized instance of <see cref="BoschFirmware"/></returns>
         public static BoschFirmware FromFile(string filename)
         {
             if (String.IsNullOrEmpty(filename))
@@ -63,7 +68,7 @@ namespace BoschFirmwareTool
             }
         }
 
-        public event EventHandler<ExtractProgressEventArgs> OnExtractProgress;
+        public event EventHandler<ExtractProgressEventArgs> ExtractProgress;
 
         public void Dispose() => Dispose(true);
 
@@ -109,8 +114,7 @@ namespace BoschFirmwareTool
                     file.Write(hdrBuf);
                     dataStream.CopyTo(file);
 
-                    var progress = new ExtractProgressEventArgs(filename, header.Length);
-                    OnExtractProgress?.Invoke(this, progress);
+                    OnExtractProgress(filename, header.Length);
 
                     continue;
                 }
@@ -129,13 +133,18 @@ namespace BoschFirmwareTool
                     dataStream.Read(fileBuf);
                     file.Write(fileBuf, 0, (int)fileHdr.FileLength);
 
-                    var progress = new ExtractProgressEventArgs(filename, fileHdr.FileLength);
-                    OnExtractProgress?.Invoke(this, progress);
+                    OnExtractProgress(filename, fileHdr.FileLength);
 
                     dataStream.Read(hdrBuf);
                     fileHdr = FileHeader.Parse(hdrBuf);
                 }
             }
+        }
+
+        private void OnExtractProgress(string filename, long filelength)
+        {
+            var args = new ExtractProgressEventArgs(filename, filelength);
+            ExtractProgress?.Invoke(this, args);
         }
 
         private void GetSubheaders()
