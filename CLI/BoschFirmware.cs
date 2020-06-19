@@ -134,6 +134,13 @@ namespace BoschFirmwareTool
 
                 OnExtractProgress(fileHdr.Filename, fileHdr.FileLength);
 
+                // TODO: make configurable (disable/enable) via CLI flag?
+                if (fileHdr.Filename.StartsWith("RomFS"))
+                {
+                    var romFsStream = new MemoryStream(fileBuf);
+                    ExtractArchive(romFsStream, new DirectoryInfo(Path.Join(outDir.FullName, "RomFS")));
+                }
+
                 fileHdr = FileHeader.Parse(dataStream);
             }
         }
