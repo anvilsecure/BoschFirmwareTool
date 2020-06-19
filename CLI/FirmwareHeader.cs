@@ -6,7 +6,6 @@ namespace BoschFirmwareTool
 {
     class FirmwareHeader
     {
-        // This structure only consumes 0x40 bytes, but the file allocates 0x400. The rest is used for unknown purposes.
         public static readonly int HeaderLength = 0x400;
 
         public uint Magic { get; set; }
@@ -18,7 +17,7 @@ namespace BoschFirmwareTool
         public uint Checksum { get; set; } // Only present on the "root" header and subheaders. If headers are doubly nested, file header will not have a checksum.
         public uint Type { get; set; }
         public byte[] NegativeList { get; set; }
-        public byte[] Signature { get; set; } // Is the key in nested headers. Single header files have this in the other block.
+        public byte[] Signature { get; set; }
         public byte[] KeyBlob { get; set; }
         public long Offset { get; set; } // Offset into the file which it was found.
 
