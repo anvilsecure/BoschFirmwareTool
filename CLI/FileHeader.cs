@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers.Binary;
+using System.IO;
 using System.Text;
 
 namespace BoschFirmwareTool
@@ -26,6 +27,13 @@ namespace BoschFirmwareTool
             };
 
             return fh;
+        }
+
+        public static FileHeader Parse(Stream stream)
+        {
+            Span<byte> buf = stackalloc byte[HeaderLength];
+            stream.Read(buf);
+            return Parse(buf);
         }
     }
 }

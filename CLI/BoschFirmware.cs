@@ -94,6 +94,14 @@ namespace BoschFirmwareTool
 
             var outDir = Directory.CreateDirectory(outputDirectory);
 
+            // Examination of e.g. arm_boot_a5.fw.gz shows files with type 0x1 are not archives, but a single file
+            // TODO: check rest of available firmwares to confirm this assumption.
+            if (_headers[0].Type == 1)
+            {
+                ExtractRawFile(outDir);
+                return;
+            }
+
             // Grab non-nested headers, which have data
             var headers = _headers.Where((header) =>
             {
@@ -106,43 +114,48 @@ namespace BoschFirmwareTool
                 var targetDir = Directory.CreateDirectory(Path.Join(outDir.FullName, $"{header.Target:X}"));
 
                 using var dataStream = GetDataStream(header);
-                Span<byte> hdrBuf = stackalloc byte[FileHeader.HeaderLength];
-
-                dataStream.Read(hdrBuf);
-                var fileHdr = FileHeader.Parse(hdrBuf);
-                if (fileHdr.Magic != Constants.FileMagic) // Raw file instead of structured file set. Probably.
-                {
-                    var filename = _origFilename + ".bin"; // no metadata, guess the name. Usually only seen on single file firmware archives.
-                    using var file = File.OpenWrite(Path.Join(targetDir.FullName, filename));
-                    file.Write(hdrBuf);
-                    dataStream.CopyTo(file);
-
-                    OnExtractProgress(filename, header.Length);
-
-                    continue;
-                }
-
-                while (fileHdr.FileLength != 0) // Read until terminating record found, which has zeroed attributes
-                {
-                    var filename = Path.GetFileName(fileHdr.Filename); // Filenames may have a path, create path if necessary.
-                    var path = Path.GetDirectoryName(fileHdr.Filename);
-
-                    var filepath = Path.Join(targetDir.FullName, path ?? "");
-                    if (!String.IsNullOrEmpty(path))
-                        Directory.CreateDirectory(Path.Join(targetDir.FullName, path));
-
-                    using var file = File.OpenWrite(Path.Join(filepath, filename));
-
-                    var fileBuf = new byte[fileHdr.OffsetToNext - FileHeader.HeaderLength]; // Offset is from header beginning, file length is from end of header
-                    dataStream.Read(fileBuf);
-                    file.Write(fileBuf, 0, (int)fileHdr.FileLength);
-
-                    OnExtractProgress(filename, fileHdr.FileLength);
-
-                    dataStream.Read(hdrBuf);
-                    fileHdr = FileHeader.Parse(hdrBuf);
-                }
+                ExtractArchive(dataStream, targetDir);
             }
+        }
+
+        // Used for extraction of archival formats in both firmware files and RomFS files.
+        private void ExtractArchive(Stream dataStream, DirectoryInfo outDir)
+        {
+            var fileHdr = FileHeader.Parse(dataStream);
+
+            while (fileHdr.FileLength != 0) // Read until terminating record found, which has zeroed attributes
+            {
+                using var file = OpenWrite(Path.Join(outDir.FullName, fileHdr.Filename));
+
+                var fileBuf = new byte[fileHdr.OffsetToNext - FileHeader.HeaderLength]; // Offset is from header beginning, file length is from end of header
+                dataStream.Read(fileBuf);
+                // OffsetToNext is generally larger than FileLength. Files are padded to the nearest 16 byte boundary.
+                file.Write(fileBuf, 0, (int)fileHdr.FileLength);
+
+                OnExtractProgress(fileHdr.Filename, fileHdr.FileLength);
+
+                fileHdr = FileHeader.Parse(dataStream);
+            }
+        }
+
+        private void ExtractRawFile(DirectoryInfo outDir)
+        {
+            var filename = _origFilename + ".out"; // TODO: make configurable?
+            var rootHeader = _headers[0];
+
+            using var dataStream = GetDataStream(rootHeader);
+            using var fileStream = OpenWrite(Path.Join(outDir.FullName, filename));
+            dataStream.CopyTo(fileStream);
+
+            OnExtractProgress(filename, rootHeader.Length);
+        }
+
+        private FileStream OpenWrite(string filepath)
+        {
+            // Some archive files will have a relative directory, especially in RomFS situations. Ensure we've created the subdirectories.
+            var fileInfo = new FileInfo(filepath);
+            fileInfo.Directory.Create();
+            return fileInfo.OpenWrite();
         }
 
         private void OnExtractProgress(string filename, long filelength)
