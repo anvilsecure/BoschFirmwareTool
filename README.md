@@ -3,7 +3,11 @@ A tool for extracting firmware files intended for Bosch's line of security and I
 
 ## Usage
 ```
-BoschFirmwareTool/CLI> dotnet run -- -h # or ./boschfwtool -h if using dotnet publish-ed version
+BoschFirmwareTool/CLI> dotnet run -- -h 
+
+Or, if using the dotnet publish-ed version
+
+BoschFirmwareTool/CLI> ./boschfwtool -h
 
 boschfwtool:
   A tool for parsing and extracting Bosch camera firmware files.
