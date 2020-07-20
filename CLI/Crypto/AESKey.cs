@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Buffers.Binary;
 
-namespace BoschFirmwareTool
+namespace BoschFirmwareTool.Crypto
 {
     internal class AESKey
     {
