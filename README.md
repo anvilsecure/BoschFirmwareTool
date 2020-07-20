@@ -37,6 +37,5 @@ Download the .NET Core SDK at https://dotnet.microsoft.com/download.
 ## Capabilities
 * Can extract both obfuscated (<= 6.50) and encrypted firmware files.
 * Extraction:
-    * Detects nested / stacked headers
-    * Parses file contents for both nested and single header files
-    * Can optionally parse RomFS contents. RomFS files are the same binary format as files in a nested firmware.
+    * Parses file contents for both nested (e.g. targeting multiple camera types) and single header files.
+    * Parses RomFS contents. RomFS files are the same binary format as files in a nested firmware, but used as immutable file storage on device, mainly for web server assets.
