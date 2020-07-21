@@ -1,6 +1,8 @@
 # Bosch Firmware Tool
 A tool for extracting firmware files intended for Bosch's line of security and IoT cameras, such as the Flexidome line.
 
+More details at: https://anvilventures.com/blog/unpacking-bosch-surveillance-camera-firmware.html
+
 ## Usage
 ```
 BoschFirmwareTool/CLI> dotnet run -- -h 
